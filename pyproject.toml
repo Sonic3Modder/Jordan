@@ -1,0 +1,12 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "jordan"
+version = "0.1.0"
+description = "Hikari prefix command parser framework"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["hikari"]
+

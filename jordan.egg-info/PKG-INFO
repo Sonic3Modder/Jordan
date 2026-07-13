@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: jordan
+Version: 0.1.0
+Summary: Hikari prefix command parser framework
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: hikari
+Dynamic: license-file
+
+# Jordan
+A Hikari Prefix Handler (Simular to others like Arc, or cresent)

@@ -1,44 +1,109 @@
+import inspect
 import typing as t
+
 import hikari
 
+
 class PrefixCommand:
-    def __init__(self, name: str, callback: t.Callable[..., t.Awaitable[None]]):
+    def __init__(
+        self,
+        name: str,
+        callback: t.Callable[..., t.Awaitable[None]]
+    ):
         self.name = name.lower()
         self.callback = callback
 
+
+PrefixType = str | t.Callable[
+    [hikari.MessageCreateEvent],
+    t.Awaitable[str] | str
+]
+
+
 class PrefixHandler:
-    def __init__(self, bot: hikari.GatewayBot, prefix: str):
+    def __init__(
+        self,
+        bot: hikari.GatewayBot,
+        prefix: PrefixType
+    ):
         self.bot = bot
         self.prefix = prefix
-        self.commands: t.Dict[str, PrefixCommand] = {}
+        self.commands: dict[str, PrefixCommand] = {}
 
-        # Hooks the listener automatically
-        self.bot.listen(hikari.MessageCreateEvent)(self._process_commands)
+        self.bot.listen(hikari.MessageCreateEvent)(
+            self._process_commands
+        )
 
     def command(self, name: str):
-        def decorator(func: t.Callable[..., t.Awaitable[None]]):
-            cmd = PrefixCommand(name, func)
-            self.commands[cmd.name] = cmd
+        def decorator(
+            func: t.Callable[..., t.Awaitable[None]]
+        ):
+            command = PrefixCommand(name, func)
+            self.commands[command.name] = command
             return func
+
         return decorator
 
-    async def _process_commands(self, event: hikari.MessageCreateEvent) -> None:
+    async def get_prefix(
+        self,
+        event: hikari.MessageCreateEvent
+    ) -> str:
+        if callable(self.prefix):
+            value = self.prefix(event)
+
+            if inspect.isawaitable(value):
+                value = await value
+
+            return value
+
+        return self.prefix
+
+    async def _process_commands(
+        self,
+        event: hikari.MessageCreateEvent
+    ) -> None:
         if event.is_bot or not event.content:
             return
 
-        if not event.content.startswith(self.prefix):
+        prefix = await self.get_prefix(event)
+        used_prefix = None
+
+        if event.content.startswith(prefix):
+            used_prefix = prefix
+        else:
+            me = self.bot.get_me()
+
+            if me:
+                for mention in (
+                    f"<@{me.id}>",
+                    f"<@!{me.id}>"
+                ):
+                    if event.content.startswith(mention):
+                        used_prefix = mention
+                        break
+
+        if used_prefix is None:
             return
 
-        raw_payload = event.content[len(self.prefix):].strip().split()
-        if not raw_payload:
+        payload = event.content[len(used_prefix):].strip()
+
+        if not payload:
             return
 
-        command_name = raw_payload[0].lower()
-        args = raw_payload[1:]
+        parts = payload.split()
 
-        if command_name in self.commands:
-            try:
-                await self.commands[command_name].callback(event, args)
-            except Exception as error:
-                print(f"❌ Error in command '{command_name}': {error}")
-                await event.message.respond("⚠️ Something went wrong while running that command.")
+        command_name = parts[0].lower()
+        args = parts[1:]
+
+        command = self.commands.get(command_name)
+
+        if command is None:
+            return
+
+        try:
+            await command.callback(event, args)
+        except Exception as error:
+            print(f"❌ Error in '{command_name}': {error}")
+            await event.message.respond(
+                "⚠️ Something went wrong while running that command."
+            )
